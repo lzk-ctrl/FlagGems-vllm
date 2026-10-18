@@ -391,12 +391,14 @@ if _runtime.device.vendor_name == "hygon":
 elif _runtime.device.vendor_name == "thead":
     from flaggems_vllm.runtime.backend._thead.fused import attention as thead_attention
     from flaggems_vllm.runtime.backend._thead.ops import (
+        bmm_w8a8_int8,
         int8_einsum,
         w8a8_block_int8_bmm,
     )
 
     flash_attn_varlen_func_w8a8_int8 = thead_attention.flash_attn_varlen_func_w8a8_int8
     __all__ += [
+        "bmm_w8a8_int8",
         "flash_attn_varlen_func_w8a8_int8",
         "int8_einsum",
         "w8a8_block_int8_bmm",
