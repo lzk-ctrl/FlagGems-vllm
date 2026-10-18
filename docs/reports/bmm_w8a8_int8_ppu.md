@@ -19,7 +19,7 @@ This first implementation targets THead PPU-ZW810E, is forward-only, and does no
 3. **Scale once after the reduction.** The full K contraction accumulates in INT32 before FP32 row/channel scaling, avoiding repeated block-wise dequantization.
 4. **Write the final output directly.** No temporary batch concatenation or layout-copy kernel is required. A preallocated output is supported, although the reported benchmark uses allocation-returning APIs on both sides.
 
-The first version reuses existing PPU MM heuristics without adding a new autotune search or modifying FlagTree. Its dependency on the existing FlagGems PPU MM JIT signature requires revalidation when that dependency changes.
+The first version reuses existing PPU MM heuristics without adding a new autotune search or modifying FlagTree. The reused MM was introduced in FlagGems commit `021c78951389da53eacfe8779e3c909dc5ce6f47` (PR #5972); measurements used `8f8fe0e0d123eafe0b1cd22d5b53b04aa4b03664`. Older CI pins lack this implementation, so the backend exports the BMM only when FlagGems exports `mm_w8a8_int8`. This preserves library imports on older environments without adding a compute fallback. The MM JIT signature requires revalidation when that dependency changes.
 
 ## Baseline and measurement
 

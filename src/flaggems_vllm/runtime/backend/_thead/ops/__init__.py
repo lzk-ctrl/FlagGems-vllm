@@ -13,7 +13,8 @@
 # limitations under the License.
 
 
-from flaggems_vllm.runtime.backend._thead.ops.bmm_w8a8_int8 import bmm_w8a8_int8
+import flag_gems
+
 from flaggems_vllm.runtime.backend._thead.ops.fused_moe import (
     fused_experts_impl,
     inplace_fused_experts,
@@ -34,7 +35,6 @@ from flaggems_vllm.runtime.backend._thead.ops.w8a8_block_int8_bmm import (
 )
 
 __all__ = [
-    "bmm_w8a8_int8",
     "fused_experts_impl",
     "gemma_rms_norm",
     "inplace_fused_experts",
@@ -46,3 +46,9 @@ __all__ = [
     "topk_softplus_sqrt",
     "w8a8_block_int8_bmm",
 ]
+
+# Older FlagGems CI pins do not export the shared PPU INT8 MM implementation.
+if "mm_w8a8_int8" in vars(flag_gems):
+    from flaggems_vllm.runtime.backend._thead.ops.bmm_w8a8_int8 import bmm_w8a8_int8
+
+    __all__ += ["bmm_w8a8_int8"]
