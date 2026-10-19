@@ -189,3 +189,75 @@ def test_perf_fused_recurrent_gated_delta_rule(qkv_contiguous):
     )
     bench.set_gems(flaggems_vllm.ops_recurrent_gated_delta_rule_fwd)
     bench.run()
+
+
+def build_int8_gdn_decode_inputs(shape, dtype, reduction=128):
+    from vllm.model_executor.layers.fla.ops.fused_recurrent import (
+        fused_recurrent_gated_delta_rule_packed_decode,
+    )
+
+    tokens, packed, heads, columns = shape
+    torch.manual_seed(42)
+    device = flaggems_vllm.device
+    mixed = torch.randn((tokens, packed), device=device, dtype=dtype)
+    a = torch.randn((tokens, heads), device=device, dtype=dtype)
+    b = torch.randn_like(a)
+    A_log = torch.zeros(heads, device=device, dtype=torch.float32)
+    dt_bias = torch.zeros_like(A_log)
+    original = (
+        torch.randn((tokens + 1, heads, columns, reduction), device=device, dtype=dtype)
+        * 0.1
+    )
+    state, scales = flaggems_vllm.quantize_gdn_state_int8(original)
+    # Start both paths from exactly the same representable state.
+    reference_state = (state.float() * scales[..., None]).to(dtype)
+    output = torch.empty((tokens, 1, heads, columns), device=device, dtype=dtype)
+    reference_output = torch.empty_like(output)
+    indices = torch.arange(1, tokens + 1, device=device, dtype=torch.int64)
+    shared = (mixed, a, b, A_log, dt_bias, reduction**-0.5)
+    reference_args = (*shared, reference_state, reference_output, indices, True)
+    gems_args = (*shared, state, scales, output, indices, True)
+    return fused_recurrent_gated_delta_rule_packed_decode, reference_args, gems_args
+
+
+class Int8StateGdnDecodeBenchmark(FusedRecurrentGatedDeltaRuleBenchmark):
+    DEFAULT_SHAPE_DESC = "T, qkv_dim, HV, V"
+    set_shapes = Benchmark.set_shapes
+
+    def set_more_shapes(self):
+        return []
+
+    def get_input_iter(self, dtype):
+        for shape in self.shapes:
+            baseline, reference_args, gems_args = build_int8_gdn_decode_inputs(
+                shape, dtype
+            )
+            yield reference_args, gems_args
+
+
+def vllm_int8_state_gdn_baseline(reference_args, gems_args):
+    from vllm.model_executor.layers.fla.ops.fused_recurrent import (
+        fused_recurrent_gated_delta_rule_packed_decode,
+    )
+
+    return fused_recurrent_gated_delta_rule_packed_decode(*reference_args)
+
+
+def run_int8_state_gdn(reference_args, gems_args):
+    return flaggems_vllm.gdn_w8a16_int8(*gems_args)
+
+
+@pytest.mark.gdn_w8a16_int8
+@pytest.mark.skipif(
+    "gdn_w8a16_int8" not in vars(flaggems_vllm),
+    reason="backend does not export INT8-state GDN",
+)
+def test_perf_gdn_w8a16_int8():
+    bench = Int8StateGdnDecodeBenchmark(
+        True,
+        op_name="gdn_w8a16_int8",
+        torch_op=vllm_int8_state_gdn_baseline,
+        dtypes=[torch.bfloat16],
+    )
+    bench.set_gems(run_int8_state_gdn)
+    bench.run()

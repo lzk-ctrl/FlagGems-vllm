@@ -372,3 +372,66 @@ def test_fused_recurrent_gated_delta_rule_fwd_accuracy(
         assert (
             rel_err.median() < 0.1
         ), f"Median relative error on final_state too large: {rel_err.median():.4f}"
+
+
+@pytest.mark.gdn_w8a16_int8
+@pytest.mark.skipif(
+    "gdn_w8a16_int8" not in vars(flaggems_vllm),
+    reason="backend does not export INT8-state GDN",
+)
+@pytest.mark.parametrize("dtype", [torch.bfloat16, torch.float16])
+@pytest.mark.parametrize("tokens", [1, 3, 49])
+@pytest.mark.parametrize("steps", [1, 32])
+@pytest.mark.parametrize("dimensions", [(8192, 32, 128, 128), (100, 2, 17, 33)])
+def test_int8_state_gdn_decode(dtype, tokens, steps, dimensions):
+    from benchmark.test_FLA.test_fused_recurrent_gated_delta_rule_perf import (
+        build_int8_gdn_decode_inputs,
+    )
+    from tests.accuracy_utils import gems_assert_close
+
+    packed, heads, columns, reduction = dimensions
+    baseline, reference_args, gems_args = build_int8_gdn_decode_inputs(
+        (tokens, packed, heads, columns), dtype, reduction=reduction
+    )
+    reference_args = list(reference_args)
+    reference_args[6] = reference_args[6].float()
+    for _ in range(steps):
+        # Isolate each update's arithmetic from accumulated quantization drift.
+        reference_args[6].copy_(gems_args[6].float() * gems_args[7][..., None])
+        expected, reference_state = baseline(*reference_args)
+        actual, state = flaggems_vllm.gdn_w8a16_int8(*gems_args)
+        gems_assert_close(actual, expected, dtype, reduce_dim=1, atol=1e-6)
+        scales = gems_args[7][..., None]
+        # Nearest rounding must stay within half one INT8 quantization step.
+        gems_assert_close(
+            state.float(),
+            reference_state / scales,
+            torch.float32,
+            reduce_dim=1,
+            atol=0.501,
+        )
+
+
+@pytest.mark.gdn_w8a16_int8
+@pytest.mark.skipif(
+    "gdn_w8a16_int8" not in vars(flaggems_vllm),
+    reason="backend does not export INT8-state GDN",
+)
+@pytest.mark.parametrize("tokens", [0, 2])
+def test_int8_state_gdn_null_slots(tokens):
+    from benchmark.test_FLA.test_fused_recurrent_gated_delta_rule_perf import (
+        build_int8_gdn_decode_inputs,
+    )
+    from tests.accuracy_utils import gems_assert_equal
+
+    baseline, reference_args, gems_args = build_int8_gdn_decode_inputs(
+        (tokens, 8192, 32, 128), torch.bfloat16
+    )
+    gems_args[-2].zero_()
+    old_state = gems_args[6].clone()
+    old_scales = gems_args[7].clone()
+    expected, _ = baseline(*reference_args)
+    actual, state = flaggems_vllm.gdn_w8a16_int8(*gems_args)
+    gems_assert_equal(actual, expected)
+    gems_assert_equal(state, old_state)
+    gems_assert_equal(gems_args[7], old_scales)

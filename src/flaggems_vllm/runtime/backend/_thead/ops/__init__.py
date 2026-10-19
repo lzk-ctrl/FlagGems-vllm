@@ -18,6 +18,10 @@ from flaggems_vllm.runtime.backend._thead.ops.fused_moe import (
     inplace_fused_experts,
     outplace_fused_experts,
 )
+from flaggems_vllm.runtime.backend._thead.ops.gdn_w8a16_int8 import (
+    gdn_w8a16_int8,
+    quantize_gdn_state_int8,
+)
 from flaggems_vllm.runtime.backend._thead.ops.gemma_rms_norm import gemma_rms_norm
 from flaggems_vllm.runtime.backend._thead.ops.int8_einsum import int8_einsum
 from flaggems_vllm.runtime.backend._thead.ops.per_token_group_quant_fp8 import (
@@ -33,6 +37,8 @@ from flaggems_vllm.runtime.backend._thead.ops.w8a8_block_int8_bmm import (
 )
 
 __all__ = [
+    "gdn_w8a16_int8",
+    "quantize_gdn_state_int8",
     "fused_experts_impl",
     "gemma_rms_norm",
     "inplace_fused_experts",

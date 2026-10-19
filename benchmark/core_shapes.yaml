@@ -523,3 +523,9 @@ swiglu:
     - [2560, 2048]
     - [15000, 2048]
   shape_desc: "M, 2H (last dim is split in half)"
+
+gdn_w8a16_int8:
+  shapes:
+    - [1, 8192, 32, 128]
+    - [3, 8192, 32, 128]
+    - [49, 8192, 32, 128]
