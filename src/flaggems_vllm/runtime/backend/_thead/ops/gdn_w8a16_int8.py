@@ -13,9 +13,12 @@ from flaggems_vllm.utils import libentry
 @triton.jit
 def store_int8_state(values, state, scales, offsets, scale_offsets, mask, mask_v):
     magnitude = tl.max(tl.abs(values), axis=1)
-    scale = tl.where(magnitude > 0, magnitude / 127.0, 1.0)
+    safe_magnitude = tl.where(magnitude > 0, magnitude, 127.0)
+    scale = safe_magnitude * (1.0 / 127.0)
+    reciprocal_scale = 127.0 / safe_magnitude
+    # Share one division across the channel instead of dividing every element.
     quantized = tl.minimum(
-        tl.maximum(tl.floor(values / scale[:, None] + 0.5), -127), 127
+        tl.maximum(tl.floor(values * reciprocal_scale[:, None] + 0.5), -127), 127
     )
     tl.store(state + offsets, quantized.to(tl.int8), mask)
     tl.store(scales + scale_offsets, scale, mask_v)
