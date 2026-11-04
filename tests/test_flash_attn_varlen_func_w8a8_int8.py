@@ -216,9 +216,14 @@ def _run_case(
     result, lse = actual if return_lse else (actual, None)
     ref, ref_lse = _reference(qr, kr, vr, qlens, klens, causal, window, cap, alibi)
     assert result is out
-    gems_assert_close(result.float(), ref, dtype=torch.float32, atol=0.025)
+    # Casting to FP32 for comparison does not remove INT8 approximation error.
+    output_rtol = 0.025 if flaggems_vllm.vendor_name == "thead" else None
+    lse_rtol = 2e-5 if flaggems_vllm.vendor_name == "thead" else None
+    gems_assert_close(
+        result.float(), ref, dtype=torch.float32, atol=0.025, rtol=output_rtol
+    )
     if return_lse:
-        gems_assert_close(lse, ref_lse, dtype=torch.float32, atol=2e-5)
+        gems_assert_close(lse, ref_lse, dtype=torch.float32, atol=2e-5, rtol=lse_rtol)
     else:
         pass
     output = flaggems_vllm.flash_attn_varlen_func(
@@ -239,7 +244,9 @@ def _run_case(
         alibi_slopes=alibi,
         **(metax_kwargs or {}),
     )
-    gems_assert_close(output.float(), ref, dtype=torch.float32, atol=0.025)
+    gems_assert_close(
+        output.float(), ref, dtype=torch.float32, atol=0.025, rtol=output_rtol
+    )
     return qr, kr, vr, cuq, cuk, result
 
 
