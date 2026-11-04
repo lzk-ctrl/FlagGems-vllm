@@ -64,6 +64,49 @@ pip install --no-build-isolation -e '.[test]'
 
 这会安装 pytest、numpy、scipy、cupy-cuda12x 等测试工具。
 
+### 可选的 PPU FA3 性能测试依赖
+
+PPU INT8 注意力 benchmark 通过 vLLM 的 `fa_version=3` 调用原生 BF16 FA3。
+先准备厂商 PyTorch、SDK 和匹配的 vLLM 后端，再安装这项独立于 `.[test]` 的可选性能测试依赖。
+
+`requirements/benchmark_thead.txt` 固定了已在 SAIL PyTorch
+`2.13.0+v0.1.0.sail2.2.0`、SDK 2.2.0、vLLM 0.31.0 与 `vllm-sail` 环境验证过的官方
+FA3 源码版本。激活相应环境和 SDK 后，从仓库根目录执行以下命令。环境中应已有 Git，
+以及 `setuptools`、`wheel`、`packaging`、`ninja`、`einops` 等 Python 构建依赖。
+
+```bash
+: "${PPU_SDK:?Activate the matching PPU SDK before installing FA3}"
+CUDA_VISIBLE_DEVICES="" PPU_VISIBLE_DEVICES="" \
+FLASH_ATTENTION_DISABLE_BACKWARD=TRUE FLASH_ATTENTION_DISABLE_FP8=TRUE \
+MAX_JOBS="${MAX_JOBS:-8}" \
+python -m pip install --no-build-isolation --no-deps --no-cache-dir \
+  --force-reinstall -r requirements/benchmark_thead.txt
+```
+
+安装时使用当前 PyTorch 和 SDK 编译官方 FP16/BF16 前向扩展，不替换厂商 PyTorch。
+保留 paged KV、split-KV、PackGQA；省略本次 BF16 推理基线不使用的反向和 FP8。
+`--no-cache-dir` 用于避免复用针对其他 PyTorch ABI 构建的旧 wheel。
+更换 PyTorch 或 SDK 后应重新执行此步骤。首次源码构建会比安装匹配的 wheel 耗时更长。
+
+安装完成后，在新进程中检查扩展加载和原生 kernel 注册：
+
+```bash
+CUDA_VISIBLE_DEVICES="" PPU_VISIBLE_DEVICES="" python - <<'PY'
+import torch
+import flash_attn_3._C
+
+for name in ("flash_attn_3::fwd", "flash_attn_3::get_scheduler_metadata"):
+    if not torch._C._dispatch_has_kernel_for_dispatch_key(name, "CUDA"):
+        raise RuntimeError(f"Missing native FA3 kernel: {name}")
+print("PyTorch:", torch.__version__)
+print("Native FA3:", flash_attn_3._C.__file__)
+PY
+```
+
+该步骤只检查二进制加载和注册，不执行设备计算。运行现有注意力 benchmark 前，
+仍需选择空闲设备。出现 `undefined symbol` 时，应针对当前环境重新编译扩展，
+无需更改 benchmark 的 `fa_version` 或绕过可用性检查。
+
 ## 完整 GPU 环境搭建
 
 使用提供的 `tools/setup.sh` 脚本进行完整环境引导:

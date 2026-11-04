@@ -64,6 +64,54 @@ pip install --no-build-isolation -e '.[test]'
 
 This installs pytest, numpy, scipy, cupy-cuda12x, and other test utilities.
 
+### Optional PPU FA3 Benchmark Dependency
+
+The PPU INT8 attention benchmark uses native BF16 FA3 through vLLM with
+`fa_version=3`. Prepare the vendor PyTorch, SDK and matching vLLM backend first;
+FA3 is an optional benchmark dependency, separate from `.[test]`.
+
+`requirements/benchmark_thead.txt` pins the official FA3 source revision tested
+with SAIL PyTorch `2.13.0+v0.1.0.sail2.2.0`, SDK 2.2.0 and vLLM 0.31.0 with
+`vllm-sail`. Activate that environment and its SDK before running this step from
+the repository root. Git and the Python build tools `setuptools`, `wheel`,
+`packaging`, `ninja` and `einops` must already be installed.
+
+```bash
+: "${PPU_SDK:?Activate the matching PPU SDK before installing FA3}"
+CUDA_VISIBLE_DEVICES="" PPU_VISIBLE_DEVICES="" \
+FLASH_ATTENTION_DISABLE_BACKWARD=TRUE FLASH_ATTENTION_DISABLE_FP8=TRUE \
+MAX_JOBS="${MAX_JOBS:-8}" \
+python -m pip install --no-build-isolation --no-deps --no-cache-dir \
+  --force-reinstall -r requirements/benchmark_thead.txt
+```
+
+This builds the official FP16/BF16 forward extension against the active PyTorch
+and SDK without replacing PyTorch. Paged KV, split-KV and PackGQA remain enabled.
+Backward and FP8 are omitted because this baseline uses BF16 inference.
+`--no-cache-dir` avoids reusing a wheel built against a different PyTorch ABI;
+rerun this step after changing PyTorch or the SDK. The first source build can
+take substantially longer than installing a matching wheel.
+
+Check extension loading and native registration in a fresh process:
+
+```bash
+CUDA_VISIBLE_DEVICES="" PPU_VISIBLE_DEVICES="" python - <<'PY'
+import torch
+import flash_attn_3._C
+
+for name in ("flash_attn_3::fwd", "flash_attn_3::get_scheduler_metadata"):
+    if not torch._C._dispatch_has_kernel_for_dispatch_key(name, "CUDA"):
+        raise RuntimeError(f"Missing native FA3 kernel: {name}")
+print("PyTorch:", torch.__version__)
+print("Native FA3:", flash_attn_3._C.__file__)
+PY
+```
+
+This checks binary loading and registration without executing a GPU workload.
+Select an idle device before running the existing attention benchmark. If an
+extension reports `undefined symbol`, rebuild it against the active environment
+instead of changing the benchmark's `fa_version` or skipping its availability check.
+
 ## Full GPU Environment Setup
 
 Use the provided `tools/setup.sh` script for a complete environment bootstrap:
