@@ -42,6 +42,7 @@ from flaggems_vllm.ops.deepseek_v4_attention_fused_q_kv_rmsnorm import (
 )
 from flaggems_vllm.ops.DSA.bin_topk import bucket_sort_topk
 from flaggems_vllm.ops.FLA import (
+    chunk_kda_scaled_dot_kkt_fwd,
     chunk_gated_delta_rule_fwd,
     chunk_kda,
     fused_recurrent_gated_delta_rule_fwd,
@@ -57,6 +58,9 @@ from flaggems_vllm.ops.flash_attn_varlen_func_w8a8_fp8 import (
     flash_attn_varlen_func_w8a8_fp8,
 )
 from flaggems_vllm.ops.flash_mla import flash_mla
+from flaggems_vllm.ops.flash_mla_with_kvcache_w8a8 import (
+    flash_mla_with_kvcache_w8a8,
+)
 from flaggems_vllm.ops.flash_mla_with_kvcache import flash_mla_with_kvcache
 from flaggems_vllm.ops.flashmla_sparse import flash_mla_sparse_fwd
 from flaggems_vllm.ops.expand_pools_and_append_tail import expand_pools_and_append_tail
@@ -131,6 +135,10 @@ from flaggems_vllm.ops.qwen4 import (
     qwen4_vendor_qsa_mqa_paged,
     qwen4_vendor_store_qsa_rows,
     qsa_prepare,
+)
+from flaggems_vllm.ops.minimax_m3_sparse_attn import (
+    minimax_m3_sparse_attn,
+    minimax_m3_sparse_attn_decode,
 )
 from flaggems_vllm.ops.moe_align_block_size import (
     moe_align_block_size,
@@ -245,6 +253,7 @@ __all__ = [
     "chunk_gated_delta_rule",
     "chunk_gated_delta_rule_fwd",
     "chunk_kda",
+    "chunk_kda_scaled_dot_kkt_fwd",
     "chunk_kda_with_safe_gate",
     "combine_topk_swa_indices",
     "compute_global_topk_indices_and_lens",
@@ -269,6 +278,7 @@ __all__ = [
     "flash_mla",
     "flash_mla_sparse_fwd",
     "flash_mla_with_kvcache",
+    "flash_mla_with_kvcache_w8a8",
     "fp32_router_gemm",
     "fp8_einsum",
     "fp8_fp4_mqa_logits",
@@ -315,6 +325,8 @@ __all__ = [
     "mhc_pre",
     "mhc_pre_with_norm",
     "mhc_rms_norm",
+    "minimax_m3_sparse_attn",
+    "minimax_m3_sparse_attn_decode",
     "MixLayout",
     "moe_align_block_size",
     "moe_align_block_size_no_tle",
